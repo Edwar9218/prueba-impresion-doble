@@ -6,6 +6,19 @@ import { ajustarSeparadores, fechaHoraBogota, limpiarTexto, presetDeTamano } fro
 const espacio = (n) => [0x1b, 0x20, n];
 const gsSize = (w, h) => [0x1d, 0x21, ((w - 1) << 4) | (h - 1)];
 
+// Última barrera antes de la impresora: la PT-210 dibuja una raya negra con cualquier carácter que no sea
+// ASCII (tildes, ñ, emojis...). Aunque el texto ya viene limpio de ticketText.limpiarTexto, aquí se
+// asegura una vez más que a cada renglón solo le queden caracteres ASCII (á -> a, ñ -> n; lo demás se quita).
+function soloAscii(linea) {
+  let t = String(linea);
+  try {
+    t = t.normalize('NFD'); // separa la letra de su tilde
+  } catch (e) {
+    // si el motor no tiene normalize, se sigue con el texto tal cual
+  }
+  return t.replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7e]/g, '');
+}
+
 function armar(lineas, size, fecha) {
   const p = presetDeTamano(size);
   const enc = new EscPosEncoder();
@@ -15,8 +28,8 @@ function armar(lineas, size, fecha) {
     .align('left')
     .raw(gsSize(p.w, p.h))
     .raw(espacio(p.spacing || 0));
-  lineas.forEach((l) => enc.line(l));
-  if (fecha) enc.raw(espacio(0)).raw(gsSize(1, 1)).line(fecha); // fecha en letra normal para que no se parta
+  lineas.forEach((l) => enc.line(soloAscii(l)));
+  if (fecha) enc.raw(espacio(0)).raw(gsSize(1, 1)).line(soloAscii(fecha)); // fecha en letra normal para que no se parta
   enc
     .raw(espacio(0)) // restaura espaciado y tamaño normales
     .raw(gsSize(1, 1))

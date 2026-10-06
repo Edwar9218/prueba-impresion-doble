@@ -23,18 +23,107 @@ export const presetDeTamano = (size) => TAMANOS[clampSize(size) - 1];
 // Caracteres por renglón según el tamaño elegido
 export const columnasPorTamano = (size) => presetDeTamano(size).cols;
 
-// Filtro del repo: se descarta lo que la impresora no puede imprimir (cp858).
-// Se conservan tildes, ñ y algunos símbolos comunes.
-const EXTRA_PERMITIDOS = 'áéíóúÁÉÍÓÚñÑüÜ¿¡°ªº€çÇ£¢¥½¼«»';
+// ---------------------------------------------------------------------------
+// Limpieza del texto antes de imprimir.
+// La PT-210 (y casi todas las impresoras térmicas baratas de 58 mm) solo imprime bien el ASCII
+// básico: con una tilde, una ñ, un emoji o un carácter raro de Word / WhatsApp / páginas web
+// dibuja una raya negra o basura. Por eso TODO texto (escrito, pegado o copiado) pasa por aquí
+// y sale solo con caracteres ASCII: á -> a, ñ -> n, “ ” -> ", — -> -, emojis se quitan, etc.
+// ---------------------------------------------------------------------------
 
+// Letra base -> todas las variantes con tilde / diéresis / cedilla que se convierten en ella.
+const EQUIVALENCIAS_LETRAS = {
+  a: 'àáâãäåāăąǎǟǡǻȁȃȧ', A: 'ÀÁÂÃÄÅĀĂĄǍǞǠǺȀȂȦ',
+  c: 'çćĉċč', C: 'ÇĆĈĊČ',
+  d: 'ďđð', D: 'ĎĐÐ',
+  e: 'èéêëēĕėęěȅȇȩ', E: 'ÈÉÊËĒĔĖĘĚȄȆȨ',
+  g: 'ĝğġģǧ', G: 'ĜĞĠĢǦ',
+  h: 'ĥħ', H: 'ĤĦ',
+  i: 'ìíîïĩīĭįıǐȉȋ', I: 'ÌÍÎÏĨĪĬĮİǏȈȊ',
+  j: 'ĵ', J: 'Ĵ',
+  k: 'ķ', K: 'Ķ',
+  l: 'ĺļľŀł', L: 'ĹĻĽĿŁ',
+  n: 'ñńņňŉ', N: 'ÑŃŅŇ',
+  o: 'òóôõöøōŏőǒǫǿȍȏȫȭȯȱ', O: 'ÒÓÔÕÖØŌŎŐǑǪǾȌȎȪȬȮȰ',
+  r: 'ŕŗřȑȓ', R: 'ŔŖŘȐȒ',
+  s: 'śŝşšș', S: 'ŚŜŞŠȘ',
+  t: 'ţťŧț', T: 'ŢŤŦȚ',
+  u: 'ùúûüũūŭůűųǔǖǘǚǜȕȗ', U: 'ÙÚÛÜŨŪŬŮŰŲǓǕǗǙǛȔȖ',
+  w: 'ŵ', W: 'Ŵ',
+  y: 'ýÿŷ', Y: 'ÝŶŸ',
+  z: 'źżž', Z: 'ŹŻŽ',
+};
+
+// Símbolos y letras especiales -> su equivalente en ASCII ('' = se quita).
+const EQUIVALENCIAS_ESPECIALES = {
+  // Comillas y apóstrofes
+  '‘': "'", '’': "'", '‚': "'", '‛': "'", '′': "'", '´': "'", '`': '`', 'ʼ': "'",
+  '“': '"', '”': '"', '„': '"', '‟': '"', '″': '"', '«': '"', '»': '"', '‹': "'", '›': "'",
+  // Guiones y rayas
+  '‐': '-', '‑': '-', '‒': '-', '–': '-', '—': '-', '―': '-', '−': '-', '﹘': '-', '－': '-',
+  // Puntos suspensivos y viñetas
+  '…': '...', '•': '*', '‣': '*', '◦': '*', '▪': '*', '▫': '*', '●': '*', '○': '*', '■': '*', '□': '*', '·': '*', '∙': '*', '⁃': '-',
+  // Letras especiales
+  'ß': 'ss', 'æ': 'ae', 'Æ': 'AE', 'œ': 'oe', 'Œ': 'OE', 'þ': 'th', 'Þ': 'TH',
+  // Símbolos
+  '¿': '', '¡': '', '°': 'o', 'º': 'o', 'ª': 'a', '€': 'EUR', '£': 'GBP', '¥': 'JPY', '¢': 'c',
+  '×': 'x', '÷': '/', '±': '+/-', '½': '1/2', '¼': '1/4', '¾': '3/4', '™': 'TM', '®': '(R)', '©': '(c)',
+  '№': 'No', '→': '->', '←': '<-', '⇒': '=>', '✓': 'v', '✔': 'v', '✗': 'x', '✘': 'x',
+  // Espacios raros -> espacio normal
+  '\u00a0': ' ', '\u1680': ' ', '\u2000': ' ', '\u2001': ' ', '\u2002': ' ', '\u2003': ' ', '\u2004': ' ',
+  '\u2005': ' ', '\u2006': ' ', '\u2007': ' ', '\u2008': ' ', '\u2009': ' ', '\u200a': ' ', '\u202f': ' ',
+  '\u205f': ' ', '\u3000': ' ', '\t': ' ',
+  // Saltos de línea raros -> salto normal
+  '\u2028': '\n', '\u2029': '\n', '\u0085': '\n',
+};
+
+const TABLA_ASCII = (() => {
+  const t = Object.assign({}, EQUIVALENCIAS_ESPECIALES);
+  Object.keys(EQUIVALENCIAS_LETRAS).forEach((base) => {
+    EQUIVALENCIAS_LETRAS[base].split('').forEach((c) => {
+      t[c] = base;
+    });
+  });
+  return t;
+})();
+
+// Marcas combinadas sueltas (tildes separadas de su letra), caracteres invisibles y selectores de emoji:
+// se quitan sin dejar rastro. (Texto en NFD, el de algunos teclados y de macOS: "e" + tilde.)
+const INVISIBLES = /[\u0300-\u036f\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufe00-\ufe0f\ufeff]/;
+
+/**
+ * Deja el texto solo con caracteres ASCII que la impresora imprime sin problema.
+ * - Tildes, ñ, ü, ç... -> letra sin tilde (teléfono -> telefono, Muñoz -> Munoz).
+ * - Comillas y guiones "elegantes" -> los normales. Espacios raros -> espacio normal.
+ * - Emojis, símbolos y cualquier otro carácter que la impresora no entiende -> se quitan.
+ * - Los saltos de línea se conservan (\r\n -> \n).
+ */
 export function limpiarTexto(texto) {
-  return String(texto == null ? '' : texto)
-    .replace(/\r\n?/g, '\n')
-    .replace(/\t/g, ' ')
-    .split('')
-    .filter((ch) => ch === '\n' || (ch >= ' ' && ch <= '~') || EXTRA_PERMITIDOS.includes(ch))
-    .join('');
+  const entrada = String(texto == null ? '' : texto).replace(/\r\n?/g, '\n');
+  let salida = '';
+  let quitado = false; // se quitó algo (emoji...) desde el último carácter visible: evita espacios dobles
+
+  for (const ch of entrada) {
+    let r;
+    if (ch === '\n') r = '\n';
+    else if (ch >= ' ' && ch <= '~') r = ch; // ASCII visible
+    else if (INVISIBLES.test(ch)) continue; // no deja espacio ni marca
+    else if (Object.prototype.hasOwnProperty.call(TABLA_ASCII, ch)) r = TABLA_ASCII[ch];
+    else r = ''; // emoji u otro carácter sin equivalente
+
+    if (r === '') {
+      quitado = true;
+      continue;
+    }
+    if (r === ' ' && quitado && (salida === '' || salida.endsWith(' ') || salida.endsWith('\n'))) continue;
+    salida += r;
+    if (r !== ' ') quitado = false;
+  }
+  return salida;
 }
+
+// ¿Después de limpiar no queda nada que imprimir? (vacío, solo espacios o solo emojis)
+export const esTextoVacio = (texto) => limpiarTexto(texto).trim().length === 0;
 
 // Las líneas de 24 guiones del editor se reemplazan por una del ancho exacto del papel.
 export function ajustarSeparadores(texto, size) {
@@ -60,7 +149,7 @@ export function fechaHoraBogota(fecha = new Date()) {
 const PLANTILLA_COBRO = /Total:\s*\$\s*domicilio:\s*\$\s*(?:A cobrar:|Total a pagar el\s+cliente:)\s*\$/g;
 
 export function esPedidoVacio(texto) {
-  const resto = String(texto == null ? '' : texto)
+  const resto = limpiarTexto(texto)
     .replace(PLANTILLA_COBRO, '')
     .replace(/-{24}/g, '')
     .replace(/\s+/g, '');
