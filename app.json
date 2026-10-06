@@ -1,29 +1,39 @@
 {
   "expo": {
-    "name": "prueba-impresion-doble",
-    "slug": "prueba-impresion-doble",
+    "name": "DomiPrint",
+    "slug": "domiprint",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
-    "ios": {
-      "supportsTablet": true
-    },
+    "newArchEnabled": false,
+    "plugins": [
+      "expo-dev-client"
+    ],
     "android": {
+      "package": "com.edwar.domiprint",
+      "softwareKeyboardLayoutMode": "resize",
+      "permissions": [
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
-      "edgeToEdgeEnabled": true
+        "backgroundColor": "#05143F"
+      }
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#05143F"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "4a9856ec-64f6-43bf-bf82-e7edbfdd51dc"
+      }
     }
   }
 }
