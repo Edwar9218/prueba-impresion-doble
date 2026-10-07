@@ -91,6 +91,19 @@ const TABLA_ASCII = (() => {
 // se quitan sin dejar rastro. (Texto en NFD, el de algunos teclados y de macOS: "e" + tilde.)
 const INVISIBLES = /[\u0300-\u036f\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufe00-\ufe0f\ufeff]/;
 
+// Letras y números "de fantasía" que se copian de WhatsApp, Instagram o generadores de texto (𝗡𝗲𝗴𝗿𝗶𝘁𝗮, 𝘤𝘶𝘳𝘴𝘪𝘷𝘢, 𝓒𝓸𝓷 𝓪𝓻𝓽𝓮,
+// ＡＮＣＨＯ): son caracteres Unicode distintos de las letras normales, así que sin esto se perderían.
+// Se convierten a su letra o número normal (negrita, cursiva, script, monoespaciado, ancho completo...).
+function aAsciiFantasia(cp) {
+  if (cp >= 0x1d400 && cp <= 0x1d6a3) {
+    const i = (cp - 0x1d400) % 52; // cada estilo trae 26 mayúsculas + 26 minúsculas
+    return String.fromCharCode(i < 26 ? 65 + i : 97 + (i - 26));
+  }
+  if (cp >= 0x1d7ce && cp <= 0x1d7ff) return String.fromCharCode(48 + ((cp - 0x1d7ce) % 10)); // números
+  if (cp >= 0xff01 && cp <= 0xff5e) return String.fromCharCode(cp - 0xfee0); // ancho completo: ＡＢＣ１２３
+  return null;
+}
+
 /**
  * Deja el texto solo con caracteres ASCII que la impresora imprime sin problema.
  * - Tildes, ñ, ü, ç... -> letra sin tilde (teléfono -> telefono, Muñoz -> Munoz).
@@ -109,6 +122,7 @@ export function limpiarTexto(texto) {
     else if (ch >= ' ' && ch <= '~') r = ch; // ASCII visible
     else if (INVISIBLES.test(ch)) continue; // no deja espacio ni marca
     else if (Object.prototype.hasOwnProperty.call(TABLA_ASCII, ch)) r = TABLA_ASCII[ch];
+    else if (aAsciiFantasia(ch.codePointAt(0)) !== null) r = aAsciiFantasia(ch.codePointAt(0));
     else r = ''; // emoji u otro carácter sin equivalente
 
     if (r === '') {

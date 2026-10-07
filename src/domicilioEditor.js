@@ -12,6 +12,17 @@ export const BLOQUE_COBRO = 'Total:$ \ndomicilio:$ \nA cobrar:$ ';
 const PATRON_BLOQUE = /Total:.*\n.*domicilio:.*\n.*(?:A cobrar:|Total a pagar el\ncliente).*$/s;
 
 /**
+ * ¿La posición está dentro de la zona de cobro (Total / domicilio / A cobrar)?
+ * Sirve para que Enter solo haga salto de línea normal fuera de esa zona.
+ */
+export function enZonaCobro(texto, pos) {
+  const match = texto.match(PATRON_BLOQUE);
+  if (!match) return false;
+  const inicio = texto.indexOf(match[0]);
+  return pos >= inicio && pos <= inicio + match[0].length;
+}
+
+/**
  * Decide qué hace Enter con el texto actual.
  * @param {string} texto      Texto ANTES de presionar Enter
  * @param {number} inicioSel  Inicio del cursor / selección
