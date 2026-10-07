@@ -72,8 +72,8 @@ export function aplicarEnter(texto, inicioSel, finSel = inicioSel) {
 
   // Fuera de la zona de cobro (o todavía no existe): separador, y el bloque
   // de cobro se agrega al final solo si aún no estaba.
-  const antes = texto.slice(0, inicioSel);
-  const despues = texto.slice(finSel);
+  const antes = texto.slice(0, inicioSel).replace(/[ \t\n]+$/, '');
+  const despues = texto.slice(finSel).replace(/^\n+/, '');
   let cursor = antes.length + SEPARADOR.length;
   // Si se acaba de crear el bloque de cobro y el Enter fue al final del pedido, el cursor pasa
   // directo al final de "Total:$ " para escribir el precio sin tener que tocar la pantalla.
