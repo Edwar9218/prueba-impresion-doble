@@ -1,77 +1,18 @@
 // ContenedorTeclado.js
-// Evita que el teclado tape los botones. En Android con edge-to-edge (SDK 54) la ventana
-// NO se reduce al abrir el teclado, así que se agrega abajo el alto del teclado.
-// Si en algún celular la ventana sí se reduce sola, se detecta (cambia el alto del contenedor)
-// y no se agrega nada para no duplicar el espacio.
-// Mientras el teclado está abierto el espacio solo crece (nunca se encoge): algunos teclados cambian
-// de alto al escribir (barra de sugerencias) y los botones daban un brinco cada vez.
-// Al salir de la app (segundo plano) se cierra el teclado y se reinicia el espacio: al volver, Android
-// restauraba el teclado sin avisar bien y los botones quedaban tapados.
-import React, { useEffect, useRef, useState } from 'react';
-import { AppState, Keyboard, StyleSheet, View } from 'react-native';
+// Deja los botones SIEMPRE a la misma altura, justo encima de donde sale el teclado, sin importar si el
+// teclado está abierto o cerrado. No escucha eventos del teclado (Android no los avisa bien en algunos
+// celulares): simplemente reserva abajo un espacio fijo, proporcional al alto de la pantalla.
+import React from 'react';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 
-// Espacio extra entre los botones y el teclado (súbelo si aún quedan muy pegados).
-const MARGEN_EXTRA = 44;
+// Parte del alto de la pantalla que se reserva abajo para el teclado (0.45 = 45 %).
+// Si el teclado de ese celular es más alto y aún tapa los botones, súbelo (por ejemplo 0.50).
+// Si los botones quedan muy arriba y sobra espacio, bájalo (por ejemplo 0.40).
+const RESERVA_TECLADO = 0.40;
 
 export default function ContenedorTeclado({ style, children }) {
-  const [extra, setExtra] = useState(0);
-  const alturaLibre = useRef(0); // alto del contenedor con el teclado cerrado
-  const alturaActual = useRef(0);
-  const tecladoAbierto = useRef(false);
-  const temporizador = useRef(null);
-
-  useEffect(() => {
-    const mostrar = Keyboard.addListener('keyboardDidShow', (e) => {
-      tecladoAbierto.current = true;
-      const alto = (e.endCoordinates && e.endCoordinates.height) || 0;
-      if (temporizador.current) clearTimeout(temporizador.current);
-      // Esperar un instante para saber si el sistema ya redujo la ventana por su cuenta.
-      temporizador.current = setTimeout(() => {
-        const reducida = alturaLibre.current > 0 && alturaActual.current < alturaLibre.current - alto * 0.5;
-        if (reducida) return;
-        setExtra((previo) => Math.max(previo, alto + MARGEN_EXTRA)); // solo crece
-      }, 150);
-    });
-    const ocultar = Keyboard.addListener('keyboardDidHide', () => {
-      tecladoAbierto.current = false;
-      if (temporizador.current) clearTimeout(temporizador.current);
-      setExtra(0);
-    });
-    return () => {
-      mostrar.remove();
-      ocultar.remove();
-      if (temporizador.current) clearTimeout(temporizador.current);
-    };
-  }, []);
-
-  // Al salir de la app (segundo plano) se cierra el teclado y se reinicia el espacio extra.
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (estado) => {
-      if (estado === 'active') return;
-      if (temporizador.current) clearTimeout(temporizador.current);
-      tecladoAbierto.current = false;
-      setExtra(0);
-      Keyboard.dismiss();
-    });
-    return () => sub.remove();
-  }, []);
-
-  const alMedir = (e) => {
-    const h = e.nativeEvent.layout.height;
-    alturaActual.current = h;
-    if (!tecladoAbierto.current) alturaLibre.current = h;
-  };
-
+  const { height } = useWindowDimensions();
   const plano = StyleSheet.flatten(style) || {};
   const base = plano.paddingBottom != null ? plano.paddingBottom : plano.padding || 0;
-
-  return (
-    <View style={s.externo} onLayout={alMedir}>
-      <View style={[style, { paddingBottom: base + extra }]}>{children}</View>
-    </View>
-  );
+  return <View style={[style, { paddingBottom: base + Math.round(height * RESERVA_TECLADO) }]}>{children}</View>;
 }
-
-const s = StyleSheet.create({
-  externo: { flex: 1 },
-});
