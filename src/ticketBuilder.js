@@ -45,8 +45,24 @@ export function buildTicketTexto(texto, size) {
   return armar(limpio.split('\n'), size, null);
 }
 
+// Si el pedido trae el bloque de cobro (Total / domicilio / A cobrar), el ticket siempre lo cierra con una
+// línea de guiones justo debajo de "A cobrar", aunque no se haya escrito en pantalla. Si ya hay una línea de
+// guiones debajo (con o sin renglones en blanco en medio), no se repite. Reconoce también el bloque antiguo.
+const BLOQUE_COBRO_RE = /Total:[^\n]*\n[^\n]*domicilio:[^\n]*\n[^\n]*(?:A cobrar:|Total a pagar el\n[^\n]*cliente:)[^\n]*/;
+
+function cerrarBloqueCobro(texto) {
+  const m = BLOQUE_COBRO_RE.exec(texto);
+  if (!m) return texto;
+  const fin = m.index + m[0].length;
+  const resto = texto.slice(fin);
+  const siguiente = resto.split('\n').map((l) => l.trim()).find((l, i) => i > 0 && l !== '');
+  if (siguiente && /^-{3,}$/.test(siguiente)) return texto; // ya está cerrado
+  const despues = resto.replace(/^\s+/, ''); // lo que sigue, sin renglones en blanco al inicio
+  return texto.slice(0, fin) + '\n' + '-'.repeat(24) + (despues ? '\n' + despues : '');
+}
+
 export function buildTicketDomicilio(texto, size) {
-  const limpio = ajustarSeparadores(sinFinales(limpiarTexto(texto)), size);
+  const limpio = ajustarSeparadores(cerrarBloqueCobro(sinFinales(limpiarTexto(texto))), size);
   return armar(limpio.split('\n'), size, fechaHoraBogota());
 }
 

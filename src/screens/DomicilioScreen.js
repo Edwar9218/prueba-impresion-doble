@@ -20,6 +20,11 @@ import { SIN_SUGERENCIAS, TECLADO_NUMERICO_EN_PRECIO } from '../ajustes';
 // Dos Enter seguidos dentro de este tiempo (milisegundos) cuentan como "doble Enter".
 const DOBLE_ENTER_MS = 600;
 
+// El teclado numérico avisa el mismo Enter por varios caminos casi a la vez (unos pocos milisegundos).
+// Todo Enter que llegue dentro de esta ventana se toma como repetido del anterior y se ignora. Debe ser menor
+// que lo que tarda una persona en dar dos Enter seguidos; si fuera más grande, el doble Enter rápido no funcionaría.
+const VENTANA_DUPLICADO_MS = 90;
+
 export default function DomicilioScreen({ textoInicial = null }) {
   const { imprimir, ocupado } = usePrinter();
   const { texto, textoRef, fijar, limpiar } = useBorrador('domicilio', textoInicial);
@@ -47,8 +52,8 @@ export default function DomicilioScreen({ textoInicial = null }) {
     if (!TECLADO_NUMERICO_EN_PRECIO || quiere === objetivoRef.current) return;
     objetivoRef.current = quiere;
     if (temporizadorModo.current) clearTimeout(temporizadorModo.current);
-    const cursorGuardado = selRef.current;
     temporizadorModo.current = setTimeout(() => {
+      const cursorGuardado = selRef.current; // el más reciente, por si se escribió algo durante la espera
       numericoRef.current = quiere;
       ultimoCambioModo.current = Date.now();
       setNumerico(quiere);
@@ -67,12 +72,23 @@ export default function DomicilioScreen({ textoInicial = null }) {
     actualizarModo(r.texto, r.cursor);
   };
 
+  // Cambio normal del texto (sin lógica especial): se fija el texto y se anota YA dónde quedó el cursor.
+  // Así, si al escribir el espacio o el Enter el teclado pasa de numérico a normal, el cursor se restaura
+  // en su lugar nuevo (después del espacio / salto) y no en el anterior (pegado al precio).
+  const fijarNormal = (nuevo, anterior) => {
+    const c = cursorTrasCambio(anterior, nuevo, selRef.current);
+    selRef.current = { start: c, end: c };
+    fijar(nuevo);
+    actualizarModo(nuevo, c);
+  };
+
   // Enter inteligente (ver domicilioEditor.js): React Native no permite cancelar Enter,
   // así que se detecta después de escrito.
   //  - Un Enter solo (fuera de la zona de cobro): salto de línea normal.
   //  - Doble Enter rápido: se deshace el primer salto y se pone el separador (y el bloque Total /
   //    domicilio / A cobrar si todavía no existe).
-  //  - Dentro de la zona de cobro: Enter sigue pasando de renglón / creando el separador final.
+  //  - Dentro de la zona de cobro: Enter en "Total" y "domicilio" pasa al siguiente renglón; al final de
+  //    "A cobrar" un Enter es salto de línea normal y el doble Enter pone solo el separador (sin repetir el bloque).
   const ultimoEnter = useRef(null); // { t: hora, pos: dónde quedó el salto de línea }
   const procesar = (nuevo) => {
     const anterior = textoRef.current;
@@ -97,13 +113,20 @@ export default function DomicilioScreen({ textoInicial = null }) {
       } else if (!enZonaCobro(anterior, enter.inicio)) {
         // Enter solo: únicamente el salto de línea. Se recuerda por si llega el segundo Enter.
         ultimoEnter.current = { t: ahora, pos: enter.inicio };
-        fijar(nuevo);
-        actualizarModo(nuevo, cursorTrasCambio(anterior, nuevo, selRef.current));
+        fijarNormal(nuevo, anterior);
         return;
       } else {
+        // Dentro de la zona de cobro.
         const r = aplicarEnter(anterior, enter.inicio, enter.fin);
-        if (r) {
+        if (r && r.texto === anterior) {
+          // Enter al final de "Total" o "domicilio": solo pasa al final del siguiente renglón.
           aplicar(r);
+          return;
+        }
+        if (r) {
+          // Enter al final de "A cobrar": ahora solo hace el salto de línea; el separador lo pone el doble Enter.
+          ultimoEnter.current = { t: ahora, pos: enter.inicio };
+          fijarNormal(nuevo, anterior);
           return;
         }
       }
@@ -114,15 +137,14 @@ export default function DomicilioScreen({ textoInicial = null }) {
       aplicar(precio);
       return;
     }
-    fijar(nuevo);
-    actualizarModo(nuevo, cursorTrasCambio(anterior, nuevo, selRef.current));
+    fijarNormal(nuevo, anterior);
   };
 
   // Si justo después de un Enter del teclado numérico llega también un salto de línea escrito por el
   // teclado, se ignora (si no, el Enter inteligente se aplicaría dos veces).
   const ultimoEnterNumerico = useRef(0);
   const onChangeText = (nuevo) => {
-    if (Date.now() - ultimoEnterNumerico.current < 250 && detectarEnter(textoRef.current, nuevo, selRef.current)) {
+    if (Date.now() - ultimoEnterNumerico.current < VENTANA_DUPLICADO_MS && detectarEnter(textoRef.current, nuevo, selRef.current)) {
       return;
     }
     procesar(nuevo);
@@ -134,7 +156,7 @@ export default function DomicilioScreen({ textoInicial = null }) {
   const enterNumerico = () => {
     if (!numericoRef.current) return;
     const ahora = Date.now();
-    if (ahora - ultimoEnterNumerico.current < 250) return;
+    if (ahora - ultimoEnterNumerico.current < VENTANA_DUPLICADO_MS) return;
     ultimoEnterNumerico.current = ahora;
     const t = textoRef.current;
     const sel = selRef.current || { start: t.length, end: t.length };

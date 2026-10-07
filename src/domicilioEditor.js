@@ -49,7 +49,11 @@ export function aplicarEnter(texto, inicioSel, finSel = inicioSel) {
           // Al final de una línea del bloque que NO es la última: pasar al final de la siguiente
           // (el texto no cambia; el salto de línea que escribió el teclado se descarta).
           if (!esUltima) {
-            const finSiguiente = finLinea + 1 + lineas[i + 1].length;
+            // Si el siguiente renglón es el cierre del bloque (línea de guiones), el cursor pasa hasta debajo de él.
+            let k = i + 1;
+            if (/^-{24}$/.test(lineas[k].trim()) && k + 1 < lineas.length) k++;
+            let finSiguiente = finLinea;
+            for (let j = i + 1; j <= k; j++) finSiguiente += 1 + lineas[j].length;
             return { texto, cursor: finSiguiente };
           }
           // Al final de la última línea (más de 7 caracteres): nuevo separador
@@ -75,7 +79,7 @@ export function aplicarEnter(texto, inicioSel, finSel = inicioSel) {
   // directo al final de "Total:$ " para escribir el precio sin tener que tocar la pantalla.
   if (!match && despues === '') cursor += BLOQUE_COBRO.split('\n')[0].length;
   return {
-    texto: antes + SEPARADOR + despues + (match ? '' : BLOQUE_COBRO),
+    texto: antes + SEPARADOR + despues + (match ? '' : BLOQUE_COBRO + SEPARADOR), // el bloque nace con su cierre
     cursor,
   };
 }

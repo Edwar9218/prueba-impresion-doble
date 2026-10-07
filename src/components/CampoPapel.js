@@ -71,6 +71,9 @@ export default function CampoPapel({
           // y la app pueda reescribir el texto (puntos de miles) sin que el teclado lo vuelva a insertar.
           // OJO: NO usar keyboardType="visible-password": en ese modo la tecla Enter deja de escribir
           // un salto de línea (hace "Listo") y se rompe el Enter inteligente.
+          // Sin mayúscula automática: el teclado no pone en mayúscula la primera letra de cada renglón nuevo
+          // (después de un Enter) ni después de un punto; lo que se escribe sale como se teclea.
+          autoCapitalize="none"
           autoCorrect={sinSugerencias ? false : undefined}
           spellCheck={sinSugerencias ? false : undefined}
           autoComplete={sinSugerencias ? 'off' : undefined}
@@ -78,7 +81,10 @@ export default function CampoPapel({
           // Teclado numérico (experimento): en Android solo existe para campos de una línea, así que el
           // campo puede verse aplanado mientras está activo, y la tecla Enter pasa a ser "Listo"
           // (onSubmitEditing), que la pantalla trata como Enter.
-          keyboardType={tecladoNumerico ? 'numeric' : 'default'}
+          // OJO: usar 'number-pad' y NO 'numeric'. En Android, 'numeric' activa los bits "con signo" y "decimal", que son
+          // los mismos bits de "TODO EN MAYÚSCULA" y "Cada Palabra"; React Native no los borra al volver al teclado
+          // normal y el teclado se queda en mayúsculas para siempre. 'number-pad' no usa esos bits.
+          keyboardType={tecladoNumerico ? 'number-pad' : 'default'}
           onSubmitEditing={onSubmitEditing}
           onKeyPress={onKeyPress}
           // 'submit' = la tecla Enter/Listo del teclado numérico solo avisa a la app (no cierra el teclado
