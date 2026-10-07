@@ -5,8 +5,10 @@
 // y no se agrega nada para no duplicar el espacio.
 // Mientras el teclado está abierto el espacio solo crece (nunca se encoge): algunos teclados cambian
 // de alto al escribir (barra de sugerencias) y los botones daban un brinco cada vez.
+// Al salir de la app (segundo plano) se cierra el teclado y se reinicia el espacio: al volver, Android
+// restauraba el teclado sin avisar bien y los botones quedaban tapados.
 import React, { useEffect, useRef, useState } from 'react';
-import { Keyboard, StyleSheet, View } from 'react-native';
+import { AppState, Keyboard, StyleSheet, View } from 'react-native';
 
 // Espacio extra entre los botones y el teclado (súbelo si aún quedan muy pegados).
 const MARGEN_EXTRA = 44;
@@ -40,6 +42,18 @@ export default function ContenedorTeclado({ style, children }) {
       ocultar.remove();
       if (temporizador.current) clearTimeout(temporizador.current);
     };
+  }, []);
+
+  // Al salir de la app (segundo plano) se cierra el teclado y se reinicia el espacio extra.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (estado) => {
+      if (estado === 'active') return;
+      if (temporizador.current) clearTimeout(temporizador.current);
+      tecladoAbierto.current = false;
+      setExtra(0);
+      Keyboard.dismiss();
+    });
+    return () => sub.remove();
   }, []);
 
   const alMedir = (e) => {
