@@ -250,3 +250,43 @@ export function enZonaPrecio(texto, cursor) {
   if (cursor == null || cursor < 0) return false;
   return /\$ ?[\d.]*$/.test(texto.slice(0, cursor));
 }
+
+// ---------------------------------------------------------------------------
+// Suma automática: A cobrar = Total + domicilio
+// Se recalcula solo cuando el cursor está en la línea "Total:" o "domicilio:".
+// Si el usuario edita "A cobrar" a mano, no se toca.
+// ---------------------------------------------------------------------------
+const valorLinea = (linea) => {
+  const m = linea.match(/\$\s*([\d.]*)/);
+  const digitos = m ? m[1].replace(/\./g, '') : '';
+  return digitos ? parseInt(digitos, 10) : 0;
+};
+
+/**
+ * @returns {{texto: string, cursor: number} | null}  null = no hay nada que cambiar
+ */
+export function sumarCobro(texto, cursor) {
+  if (cursor == null) return null;
+  const lineas = texto.split('\n');
+  let offset = 0;
+  for (let i = 0; i + 2 < lineas.length; i++) {
+    if (
+      /^\s*Total:/.test(lineas[i]) &&
+      /domicilio:/.test(lineas[i + 1]) &&
+      /^\s*A cobrar:/.test(lineas[i + 2])
+    ) {
+      // Fin de la línea "domicilio:"
+      const finDomicilio = offset + lineas[i].length + 1 + lineas[i + 1].length;
+      if (cursor < offset || cursor > finDomicilio) return null; // cursor en otro lado (p. ej. en A cobrar)
+
+      const suma = valorLinea(lineas[i]) + valorLinea(lineas[i + 1]);
+      const nueva = 'A cobrar:$ ' + (suma > 0 ? formatoCOP(String(suma)) : '');
+      if (nueva === lineas[i + 2]) return null;
+
+      lineas[i + 2] = nueva;
+      return { texto: lineas.join('\n'), cursor }; // A cobrar queda después del cursor, no se mueve
+    }
+    offset += lineas[i].length + 1;
+  }
+  return null;
+}

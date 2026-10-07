@@ -8,6 +8,7 @@ import {
   enZonaCobro,
   enZonaPrecio,
   procesarPrecio,
+  sumarCobro,
 } from '../domicilioEditor';
 import { esPedidoVacio } from '../ticketText';
 import { insertarEnCursor, leerPortapapeles } from '../campo';
@@ -66,10 +67,12 @@ export default function DomicilioScreen({ textoInicial = null }) {
 
   // Aplica un resultado de la lógica (texto + cursor) y revisa si hay que cambiar de teclado.
   const aplicar = (r) => {
-    fijar(r.texto);
+    const s = sumarCobro(r.texto, r.cursor);
+    const textoFinal = s ? s.texto : r.texto;
+    fijar(textoFinal);
     selRef.current = { start: r.cursor, end: r.cursor };
     setSeleccion({ start: r.cursor, end: r.cursor });
-    actualizarModo(r.texto, r.cursor);
+    actualizarModo(textoFinal, r.cursor);
   };
 
   // Cambio normal del texto (sin lógica especial): se fija el texto y se anota YA dónde quedó el cursor.
@@ -78,8 +81,11 @@ export default function DomicilioScreen({ textoInicial = null }) {
   const fijarNormal = (nuevo, anterior) => {
     const c = cursorTrasCambio(anterior, nuevo, selRef.current);
     selRef.current = { start: c, end: c };
-    fijar(nuevo);
-    actualizarModo(nuevo, c);
+    const s = sumarCobro(nuevo, c);
+    const textoFinal = s ? s.texto : nuevo;
+    fijar(textoFinal);
+    if (s) setSeleccion({ start: c, end: c }); // evita que Android mueva el cursor al cambiar el texto
+    actualizarModo(textoFinal, c);
   };
 
   // Enter inteligente (ver domicilioEditor.js): React Native no permite cancelar Enter,
